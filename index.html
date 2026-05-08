@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>INVICTUS-2K26 | QUIZ BATTLE – FIXED MULTIPLAYER</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --neon-blue: #00f7ff;
+            --neon-pink: #ff2d75;
+            --neon-purple: #b400ff;
+            --neon-gold: #ffd966;
+            --neon-green: #39ff14;
+        }
+        body {
+            min-height: 100vh;
+            background: radial-gradient(circle at 30% 10%, #1a0033, #000000);
+            font-family: 'Poppins', 'Segoe UI', monospace;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow-x: hidden;
+        }
+        body::before, body::after { /* same as before, keep */ content: ''; position: fixed; pointer-events: none; z-index: 0; }
+        body::before {
+            width: 150%; height: 150%; top: -25%; left: -25%;
+            background: radial-gradient(circle at 20% 40%, rgba(0,247,255,0.2), transparent 50%),
+                        radial-gradient(circle at 80% 70%, rgba(255,45,117,0.2), transparent 50%),
+                        radial-gradient(circle at 40% 90%, rgba(180,0,255,0.15), transparent 60%);
+            animation: floatBg 25s infinite alternate;
+        }
+        @keyframes floatBg { 0% { transform: scale(1) rotate(0deg); opacity: 0.6; } 100% { transform: scale(1.1) rotate(5deg); opacity: 1; } }
+        body::after {
+            width: 200%; height: 200%; top: -50%; left: -50%;
+            background: repeating-linear-gradient(45deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 2px, transparent 2px, transparent 12px);
+            animation: particleShift 30s linear infinite;
+        }
+        @keyframes particleShift { from { transform: translate(0,0) rotate(0deg); } to { transform: translate(5%,5%) rotate(2deg); } }
+        .mode-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); backdrop-filter: blur(20px);
+            display: flex; justify-content: center; align-items: center; z-index: 1000;
+        }
+        .mode-card {
+            background: rgba(15,15,35,0.95); border-radius: 3rem; padding: 2rem 3rem;
+            text-align: center; border: 2px solid var(--neon-blue);
+            box-shadow: 0 0 50px var(--neon-blue); animation: borderNeon 3s infinite;
+        }
+        .mode-card h1 { color: var(--neon-gold); margin-bottom: 2rem; font-size: 2rem; }
+        .mode-buttons-choice { display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; }
+        .choice-btn {
+            background: linear-gradient(145deg, #2a3f4a, #1a2a3a); border: none;
+            padding: 1rem 2rem; border-radius: 3rem; font-size: 1.5rem;
+            font-weight: bold; cursor: pointer; color: white; transition: 0.2s;
+        }
+        .choice-btn:hover { transform: scale(1.05); box-shadow: 0 0 20px var(--neon-blue); }
+        .arena {
+            position: relative; z-index: 2; max-width: 1300px; width: 100%;
+            background: rgba(15,15,35,0.85); backdrop-filter: blur(15px);
+            border-radius: 2.5rem; border: 1px solid rgba(0,247,255,0.6);
+            box-shadow: 0 0 40px rgba(0,247,255,0.4); padding: 1.2rem 1.8rem;
+            animation: borderNeon 3s infinite; display: none;
+        }
+        @keyframes borderNeon {
+            0% { border-color: var(--neon-blue); box-shadow: 0 0 20px var(--neon-blue); }
+            33% { border-color: var(--neon-pink); box-shadow: 0 0 30px var(--neon-pink); }
+            66% { border-color: var(--neon-purple); box-shadow: 0 0 30px var(--neon-purple); }
+            100% { border-color: var(--neon-blue); box-shadow: 0 0 20px var(--neon-blue); }
+        }
+        .header {
+            display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+            gap: 0.8rem; background: rgba(0,0,0,0.7); padding: 0.5rem 1.8rem;
+            border-radius: 4rem; margin-bottom: 1rem; border-bottom: 2px solid var(--neon-gold);
+        }
+        .token-panel {
+            background: linear-gradient(145deg, #1a1a2e, #0e0e1a); padding: 0.3rem 1.5rem;
+            border-radius: 3rem; font-weight: bold; font-size: 1.3rem; color: var(--neon-gold);
+            animation: tokenGlow 1.2s infinite alternate;
+        }
+        @keyframes tokenGlow { from { text-shadow: 0 0 2px gold; } to { text-shadow: 0 0 12px gold; } }
+        .mode-switch { display: flex; gap: 1rem; }
+        .mode-switch-btn {
+            background: linear-gradient(145deg, #2a3f4a, #1a2a3a); border: none;
+            padding: 0.4rem 1.2rem; border-radius: 2rem; font-weight: bold; cursor: pointer; color: white;
+        }
+        .mode-switch-btn.active { background: linear-gradient(135deg, #ff3366, #ff9933); color: black; }
+        .config-bar {
+            display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem;
+            background: rgba(0,0,0,0.5); padding: 0.6rem 1.5rem; border-radius: 4rem; margin-bottom: 1rem;
+        }
+        .config-item {
+            display: flex; align-items: center; gap: 0.6rem; background: rgba(25,30,55,0.9);
+            padding: 0.2rem 1.2rem; border-radius: 2rem;
+        }
+        select, button {
+            background: #0f1a1f; color: var(--neon-blue); border: 1px solid var(--neon-blue);
+            padding: 0.3rem 0.9rem; border-radius: 2rem; font-weight: bold; cursor: pointer;
+        }
+        .quiz-main {
+            background: rgba(5,5,20,0.6); border-radius: 1.8rem; padding: 1rem;
+        }
+        .question-box {
+            background: linear-gradient(145deg, #0a0f20, #010510); padding: 1rem;
+            border-radius: 1.8rem; margin-bottom: 1rem;
+            font-size: clamp(1rem, 4vw, 1.4rem); font-weight: 700; text-align: center;
+            color: #fff2d7; border-left: 5px solid var(--neon-pink); border-right: 5px solid var(--neon-blue);
+        }
+        .options-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8rem; margin-bottom: 1rem;
+        }
+        .option {
+            background: linear-gradient(145deg, #1c2538, #111827); padding: 0.8rem;
+            border-radius: 2rem; text-align: center; cursor: pointer; font-weight: 600;
+            border: 1px solid rgba(0,247,255,0.4); color: #eef; transition: 0.2s;
+        }
+        .option.correct-feedback {
+            background: linear-gradient(145deg, #1e6a3a, #0a3a1a); border: 2px solid var(--neon-green);
+            box-shadow: 0 0 20px var(--neon-green);
+        }
+        .option.wrong-feedback {
+            background: linear-gradient(145deg, #aa2a2a, #5a1515); border: 2px solid #ff4444;
+            text-decoration: line-through;
+        }
+        .action-bar { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+        .shop-btn {
+            background: linear-gradient(135deg, #3a2a1e, #1f1208); border: 1px solid var(--neon-gold);
+            color: #ffdd99; padding: 0.5rem 1.2rem; border-radius: 2rem;
+        }
+        .next-container { display: flex; justify-content: center; margin: 0.5rem 0; }
+        .next-btn {
+            background: linear-gradient(135deg, #f7971e, #ffd200); border: none;
+            padding: 0.6rem 2rem; border-radius: 3rem; font-weight: bold; color: #111; cursor: pointer;
+        }
+        .next-btn.disabled { opacity: 0.5; pointer-events: none; }
+        .timer-bar { height: 5px; background: #ffaa44; width: 100%; border-radius: 3px; margin: 0.5rem 0; }
+        .status {
+            text-align: center; margin-top: 0.3rem; font-size: 0.85rem; color: #bbffdd;
+            background: rgba(0,0,0,0.6); padding: 0.3rem; border-radius: 2rem;
+        }
+        .multiplayer-room {
+            background: rgba(0,0,0,0.7); padding: 0.8rem; border-radius: 2rem; margin-top: 1rem;
+            display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem;
+        }
+        .room-input {
+            background: #0f1a1f; border: 1px solid var(--neon-blue); padding: 0.4rem 0.8rem;
+            border-radius: 2rem; color: white;
+        }
+        .start-btn { background: linear-gradient(135deg, #ffaa44, #ff6600); color: black; }
+        #playersList { font-size: 0.8rem; margin-top: 0.2rem; }
+        .single-only { display: flex; }
+        @media (max-width: 700px) {
+            .arena { padding: 0.8rem; }
+            .options-grid { grid-template-columns: 1fr; }
+            .mode-card { padding: 1rem 1.5rem; }
+            .choice-btn { padding: 0.6rem 1rem; font-size: 1.2rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="modeOverlay" class="mode-overlay">
+    <div class="mode-card">
+        <h1>⚡ QUIZ BATTLE ARENA ⚡</h1>
+        <div class="mode-buttons-choice">
+            <button id="chooseSingle" class="choice-btn">🎮 SINGLE PLAYER</button>
+            <button id="chooseMulti" class="choice-btn">👥 MULTIPLAYER</button>
+        </div>
+    </div>
+</div>
+
+<div id="mainArena" class="arena">
+    <div class="header">
+        <div class="token-panel">🎲 TOKENS: <span id="tokenCount">100</span> 🪙</div>
+        <div class="mode-switch">
+            <button id="switchToSingle" class="mode-switch-btn">🎮 SINGLE</button>
+            <button id="switchToMulti" class="mode-switch-btn">👥 MULTI</button>
+        </div>
+    </div>
+
+    <div id="singleConfig" class="config-bar">
+        <div class="config-item">📚 DOMAIN:
+            <select id="domainSelect">
+                <option value="gaming">🎮 GAMING</option>
+                <option value="healthcare">🩺 HEALTHCARE</option>
+                <option value="education">📖 EDUCATION</option>
+            </select>
+        </div>
+        <div class="config-item">⚡ DIFFICULTY:
+            <select id="difficultySelect">
+                <option value="easy">EASY</option>
+                <option value="medium">MEDIUM</option>
+                <option value="hard">HARD</option>
+            </select>
+        </div>
+        <button id="newGameBtn">🔄 NEW QUIZ</button>
+    </div>
+
+    <div id="multiplayerPanel" style="display: none;">
+        <div class="multiplayer-room">
+            <input type="text" id="roomName" class="room-input" placeholder="Room Name" value="QuizArena">
+            <input type="password" id="roomPassword" class="room-input" placeholder="Password">
+            <select id="multiDomain" class="room-input">
+                <option value="gaming">Gaming</option>
+                <option value="healthcare">Healthcare</option>
+                <option value="education">Education</option>
+            </select>
+            <select id="multiDifficulty" class="room-input">
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+            </select>
+            <button id="createRoomBtn">🏠 CREATE ROOM</button>
+            <button id="joinRoomBtn">🔗 JOIN ROOM</button>
+            <button id="leaveRoomBtn" style="display:none;">🚪 LEAVE</button>
+        </div>
+        <div class="status" id="mpStatus">Not connected</div>
+        <div id="playersList" class="status">Players: --</div>
+        <button id="startGameBtn" class="start-btn" style="display:none;">▶ START QUIZ</button>
+        <div id="opponentScoreDisplay" class="status">Opponent Score: --</div>
+    </div>
+
+    <div class="quiz-main" id="quizArea">
+        <div class="question-box" id="questionText">Select mode & settings</div>
+        <div class="timer-bar" id="timerBar" style="width:0%"></div>
+        <div class="options-grid" id="optionsContainer"></div>
+        <div class="action-bar single-only" id="actionBar">
+            <button id="hintBtn" class="shop-btn">💡 HINT (-20 tokens)</button>
+            <button id="revealBtn" class="shop-btn">🔓 REVEAL ANSWER (-30 tokens)</button>
+        </div>
+        <div class="next-container single-only">
+            <button id="nextBtn" class="next-btn disabled">➡️ NEXT QUESTION</button>
+        </div>
+        <div class="status" id="statusMsg">✨ Ready ✨</div>
+    </div>
+</div>
+
+<script>
+    // ---------- FULL QUESTION BANK (same as before, shortened for readability but complete) ----------
+    const curatedBank = {
+        gaming: { easy: [{ q: "Which company created PlayStation?", opts: ["Microsoft","Nintendo","Sony","Sega"], correct:2 },{ q: "What does 'RPG' stand for?", opts: ["Rapid Play Game","Role-Playing Game","Random Player Gen","Realistic Physics Game"], correct:1 },{ q: "Which game features 'Mario'?", opts: ["Sonic","Super Mario","Call of Duty","Fortnite"], correct:1 },{ q: "Main objective in 'Among Us'?", opts: ["Build ship","Complete tasks & find impostor","Race","Collect coins"], correct:1 },{ q: "Popular battle royale game?", opts: ["Minecraft","The Witcher","Fortnite","Tetris"], correct:2 },{ q: "Which company makes Xbox?", opts: ["Sony","Nintendo","Microsoft","Sega"], correct:2 },{ q: "Best-selling game of all time?", opts: ["GTA V","Minecraft","Tetris","PUBG"], correct:1 },{ q: "Build with blocks game?", opts: ["Roblox","Minecraft","Terraria","LEGO Worlds"], correct:1 },{ q: "What does 'PvP' stand for?", opts: ["Player vs Player","Person vs Person","Play vs Play","Party vs Party"], correct:0 },{ q: "Game with 'Master Chief'?", opts: ["Halo","Gears of War","Call of Duty","Battlefield"], correct:0 }],
+            medium: [{ q: "Lara Croft's first game?", opts: ["Tomb Raider","Uncharted","Horizon","Legacy of Kain"], correct:0 },{ q: "'The Witcher 3' developer?", opts: ["Ubisoft","CD Projekt Red","Bethesda","Rockstar"], correct:1 },{ q: "What does 'FPS' stand for?", opts: ["First Person Shooter","Fast Play System","Frame Per Second","Fiction Stats"], correct:0 },{ q: "Nintendo console 2017?", opts: ["Wii U","Switch","3DS","GameCube"], correct:1 },{ q: "God of War (2018) protagonist?", opts: ["Zeus","Atreus","Kratos","Odin"], correct:2 },{ q: "Game with 'Solid Snake'?", opts: ["Metal Gear Solid","Splinter Cell","Hitman","Deus Ex"], correct:0 },{ q: "Zelda main villain?", opts: ["Ganondorf","Bowser","Dr. Eggman","Sephiroth"], correct:0 },{ q: "Final Fantasy VII protagonist?", opts: ["Cloud","Squall","Zidane","Tidus"], correct:0 },{ q: "MOBA esports title?", opts: ["CS:GO","League of Legends","Overwatch","Valorant"], correct:1 },{ q: "What does 'DLC' stand for?", opts: ["Downloadable Content","Direct Level Control","Digital License","Data Link"], correct:0 }],
+            hard: [{ q: "Dota 2 river name?", opts: ["River Fagdu","River Styx","River Jord","River Roshan"], correct:0 },{ q: "First 'Parry' mechanic fighting game?", opts: ["Street Fighter III","Mortal Kombat","Tekken 3","Virtua Fighter"], correct:0 },{ q: "Touhou Project creator?", opts: ["ZUN","Yoko Taro","Kojima","Miyamoto"], correct:0 },{ q: "Highest LoL rank?", opts: ["Grandmaster","Challenger","Master","Diamond"], correct:1 },{ q: "Engine with Blueprints?", opts: ["Unity","Unreal Engine","Godot","CryEngine"], correct:1 },{ q: "Sonic's real name?", opts: ["Olgilvie Maurice Hedgehog","Miles Prower","Shadow","Silver"], correct:0 },{ q: "First Souls game with stamina?", opts: ["Demon's Souls","Dark Souls","Bloodborne","Elden Ring"], correct:0 },{ q: "Classic RuneScape max level?", opts: ["99","100","120","126"], correct:0 },{ q: "Persona 5 final boss?", opts: ["Yaldabaoth","Shido","Akechi","Igor"], correct:0 },{ q: "Halo theme composer?", opts: ["Marty O'Donnell","Jeremy Soule","Hans Zimmer","John Williams"], correct:0 }]
+        },
+        healthcare: { easy: [{ q: "Normal body temp ~ ?", opts: ["36.5°C","38°C","39°C","40°C"], correct:0 },{ q: "Which organ pumps blood?", opts: ["Brain","Liver","Heart","Lungs"], correct:2 },{ q: "Vitamin C deficiency?", opts: ["Scurvy","Rickets","Anemia","Beriberi"], correct:0 },{ q: "Largest organ?", opts: ["Heart","Liver","Skin","Brain"], correct:2 },{ q: "Adult bone count?", opts: ["206","208","205","210"], correct:0 },{ q: "Hardest body substance?", opts: ["Enamel","Bone","Cartilage","Keratin"], correct:0 },{ q: "Sunlight vitamin?", opts: ["Vitamin D","Vitamin C","B12","A"], correct:0 },{ q: "Normal BP reading?", opts: ["120/80","140/90","100/70","130/85"], correct:0 },{ q: "Which is an organ?", opts: ["Stomach","Tendon","Ligament","Cartilage"], correct:0 },{ q: "BMI stands for?", opts: ["Body Mass Index","Bone Mineral Index","Blood Measure","Brain Mass"], correct:0 }],
+            medium: [{ q: "MRI full form?", opts: ["Magnetic Resonance Imaging","Medical Ray Imaging","Magnetic Record","Muscle Reflection"], correct:0 },{ q: "Universal donor blood?", opts: ["O-","AB+","A+","B-"], correct:0 },{ q: "Smallest bone?", opts: ["Stapes","Malleus","Incus","Femur"], correct:0 },{ q: "Normal resting heart rate?", opts: ["60-100 bpm","40-60","100-120","120-140"], correct:0 },{ q: "Plasmodium causes?", opts: ["Malaria","Dengue","Typhoid","Cholera"], correct:0 },{ q: "Hemoglobin function?", opts: ["Carry oxygen","Fight infection","Clot blood","Digest"], correct:0 },{ q: "Insulin producing gland?", opts: ["Pancreas","Thyroid","Pituitary","Adrenal"], correct:0 },{ q: "ECG stands for?", opts: ["Electrocardiogram","Echocardiogram","Electroencephalogram","Electromyogram"], correct:0 },{ q: "Malaria vector?", opts: ["Mosquito","Tick","Flea","Louse"], correct:0 },{ q: "Medical term for heart attack?", opts: ["Myocardial infarction","Stroke","Aneurysm","Embolism"], correct:0 }],
+            hard: [{ q: "High BP medical term?", opts: ["Hypertension","Hypotension","Hyperglycemia","Hyperlipidemia"], correct:0 },{ q: "COVID-19 causing virus?", opts: ["SARS-CoV-2","MERS-CoV","H1N1","Ebola"], correct:0 },{ q: "Insulin produced by?", opts: ["Beta cells","Alpha cells","Delta cells","Gamma cells"], correct:0 },{ q: "CBC full form?", opts: ["Complete Blood Count","Comprehensive Body Check","Cardiac Blood","Cerebral Blood"], correct:0 },{ q: "Autoimmune disease example?", opts: ["Rheumatoid arthritis","Tuberculosis","Pneumonia","Appendicitis"], correct:0 },{ q: "Most common nosocomial infection?", opts: ["UTI","Pneumonia","Surgical site","Bloodstream"], correct:0 },{ q: "GFR measures?", opts: ["Kidney function","Liver function","Heart","Lung"], correct:0 },{ q: "Anaphylaxis treatment?", opts: ["Epinephrine","Antihistamine","Corticosteroid","Albuterol"], correct:0 },{ q: "Medical name for whiplash?", opts: ["Cervical acceleration-deceleration injury","Spinal contusion","Neck strain","Vertebral fracture"], correct:0 },{ q: "Peptic ulcer bacterium?", opts: ["H. pylori","E. coli","Salmonella","C. diff"], correct:0 }]
+        },
+        education: { easy: [{ q: "'Romeo and Juliet' author?", opts: ["Shakespeare","Dickens","Hemingway","Austen"], correct:0 },{ q: "15 × 4 = ?", opts: ["60","45","75","80"], correct:0 },{ q: "Capital of France?", opts: ["Paris","Berlin","Madrid","London"], correct:0 },{ q: "Largest ocean?", opts: ["Atlantic","Indian","Arctic","Pacific"], correct:3 },{ q: "Mona Lisa painter?", opts: ["Van Gogh","Da Vinci","Picasso","Rembrandt"], correct:1 },{ q: "Square root of 64?", opts: ["8","6","7","9"], correct:0 },{ q: "Closest planet to sun?", opts: ["Mercury","Venus","Earth","Mars"], correct:0 },{ q: "Penicillin discoverer?", opts: ["Fleming","Curie","Pasteur","Koch"], correct:0 },{ q: "Chemical symbol for water?", opts: ["H2O","CO2","O2","NaCl"], correct:0 },{ q: "Sahara Desert continent?", opts: ["Africa","Asia","Australia","South America"], correct:0 }],
+            medium: [{ q: "Element symbol 'Au'?", opts: ["Gold","Silver","Iron","Copper"], correct:0 },{ q: "√144 = ?", opts: ["12","14","16","18"], correct:0 },{ q: "Evolution theory proposer?", opts: ["Darwin","Lamarck","Mendel","Watson"], correct:0 },{ q: "Longest river?", opts: ["Amazon","Nile","Yangtze","Mississippi"], correct:1 },{ q: "Red Planet?", opts: ["Mars","Jupiter","Venus","Saturn"], correct:0 },{ q: "Sistine Chapel painter?", opts: ["Michelangelo","Da Vinci","Raphael","Donatello"], correct:0 },{ q: "Hardest natural material?", opts: ["Diamond","Graphene","Corundum","Tungsten"], correct:0 },{ q: "US Civil War opponents?", opts: ["North vs South","East vs West","USA vs UK","Union vs Canada"], correct:0 },{ q: "Capital of Japan?", opts: ["Tokyo","Kyoto","Osaka","Nagoya"], correct:0 },{ q: "'1984' author?", opts: ["Orwell","Huxley","Bradbury","Kafka"], correct:0 }],
+            hard: [{ q: "Theory of relativity proposer?", opts: ["Einstein","Newton","Galileo","Maxwell"], correct:0 },{ q: "Hardest natural substance?", opts: ["Diamond","Gold","Iron","Platinum"], correct:0 },{ q: "Alexandria's ancient wonder?", opts: ["Lighthouse","Pyramids","Colossus","Temple of Artemis"], correct:0 },{ q: "Tungsten chemical symbol?", opts: ["W","Tg","Tu","Tn"], correct:0 },{ q: "'Pride and Prejudice' author?", opts: ["Jane Austen","Charlotte Brontë","Emily Dickinson","George Eliot"], correct:0 },{ q: "Derivative of ln(x) ?", opts: ["1/x","x","e^x","ln(x)"], correct:0 },{ q: "Highest electronegativity element?", opts: ["Fluorine","Oxygen","Chlorine","Nitrogen"], correct:0 },{ q: "'The Persistence of Memory' painter?", opts: ["Dali","Picasso","Monet","Warhol"], correct:0 },{ q: "Capital of Bhutan?", opts: ["Thimphu","Paro","Punakha","Wangdue"], correct:0 },{ q: "'The Divine Comedy' author?", opts: ["Dante","Boccaccio","Petrarch","Ariosto"], correct:0 }]
+        }
+    };
+
+    let askedTracker = {};
+    function getUniqueQuestion(domain, difficulty) {
+        const bank = curatedBank[domain]?.[difficulty];
+        if (!bank) return null;
+        const key = `${domain}_${difficulty}`;
+        if (!askedTracker[key]) askedTracker[key] = [];
+        if (askedTracker[key].length >= bank.length) askedTracker[key] = [];
+        let available = bank.filter((_, idx) => !askedTracker[key].includes(idx));
+        if (available.length === 0) { askedTracker[key] = []; available = bank; }
+        const randomIndex = bank.indexOf(available[Math.floor(Math.random() * available.length)]);
+        askedTracker[key].push(randomIndex);
+        return { ...bank[randomIndex] };
+    }
+
+    // ---------- GLOBAL STATE ----------
+    let currentQuestion = null;
+    let currentTokens = 100;
+    let currentMode = "single";
+    let currentDomain = "gaming";
+    let currentDifficulty = "easy";
+    let score = 0;
+    let answerLock = false;
+    let disabledIndices = [];
+
+    // Multiplayer
+    let peer = null;
+    let connections = [];
+    let isHost = false;
+    let gameStarted = false;
+    let questionPool = [];
+    let currentQuestionIndex = 0;
+    let timerInterval = null;
+    let timeLeft = 0;
+    let opponentScore = 0;
+
+    // DOM elements
+    const tokenSpan = document.getElementById("tokenCount");
+    const questionDiv = document.getElementById("questionText");
+    const optionsDiv = document.getElementById("optionsContainer");
+    const statusSpan = document.getElementById("statusMsg");
+    const domainSelect = document.getElementById("domainSelect");
+    const difficultySelect = document.getElementById("difficultySelect");
+    const singleConfigDiv = document.getElementById("singleConfig");
+    const multiPanel = document.getElementById("multiplayerPanel");
+    const mpStatus = document.getElementById("mpStatus");
+    const opponentScoreDiv = document.getElementById("opponentScoreDisplay");
+    const playersListDiv = document.getElementById("playersList");
+    const startGameBtn = document.getElementById("startGameBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const timerBar = document.getElementById("timerBar");
+    const hintBtn = document.getElementById("hintBtn");
+    const revealBtn = document.getElementById("revealBtn");
+    const newGameBtn = document.getElementById("newGameBtn");
+    const createRoomBtn = document.getElementById("createRoomBtn");
+    const joinRoomBtn = document.getElementById("joinRoomBtn");
+    const leaveRoomBtn = document.getElementById("leaveRoomBtn");
+
+    function updateTokenUI() { tokenSpan.innerText = currentTokens; }
+    function clearOptionStyles() { document.querySelectorAll(".option").forEach(opt => opt.classList.remove("correct-feedback", "wrong-feedback")); }
+    function enableOptions(enable) { document.querySelectorAll(".option").forEach(opt => opt.style.pointerEvents = enable ? "auto" : "none"); }
+    function resetDisabledIndices() { disabledIndices = []; }
+
+    // ---------- SINGLE PLAYER (full original) ----------
+    function loadNewQuestion() {
+        if (answerLock) return;
+        const q = getUniqueQuestion(currentDomain, currentDifficulty);
+        if (!q) { questionDiv.innerText = "⚠️ No questions. Change settings."; return; }
+        currentQuestion = { ...q };
+        questionDiv.innerText = currentQuestion.q;
+        optionsDiv.innerHTML = "";
+        currentQuestion.opts.forEach((opt, idx) => {
+            const optDiv = document.createElement("div");
+            optDiv.classList.add("option");
+            optDiv.innerText = opt;
+            optDiv.onclick = () => answerQuestion(idx);
+            optionsDiv.appendChild(optDiv);
+        });
+        clearOptionStyles();
+        enableOptions(true);
+        statusSpan.innerHTML = "🤔 Choose your answer...";
+        answerLock = false;
+        nextBtn.classList.add("disabled");
+        resetDisabledIndices();
+    }
+
+    function answerQuestion(selectedIdx) {
+        if (answerLock || !currentQuestion) return;
+        answerLock = true;
+        const isCorrect = (selectedIdx === currentQuestion.correct);
+        const allOptions = document.querySelectorAll(".option");
+        if (allOptions[currentQuestion.correct]) allOptions[currentQuestion.correct].classList.add("correct-feedback");
+        if (!isCorrect) {
+            if (allOptions[selectedIdx]) allOptions[selectedIdx].classList.add("wrong-feedback");
+            statusSpan.innerHTML = `❌ WRONG! Correct highlighted green. Score: ${score}`;
+        } else {
+            if (allOptions[selectedIdx]) allOptions[selectedIdx].classList.add("correct-feedback");
+            currentTokens += 10;
+            score++;
+            statusSpan.innerHTML = `✅ CORRECT! +10 tokens 🪙 | Score: ${score}`;
+        }
+        updateTokenUI();
+        enableOptions(false);
+        nextBtn.classList.remove("disabled");
+    }
+
+    function goToNextQuestion() {
+        if (!answerLock) return;
+        answerLock = false;
+        loadNewQuestion();
+    }
+
+    function useHint() {
+        if (answerLock || !currentQuestion) return;
+        if (currentTokens < 20) { statusSpan.innerText = "🚫 Need 20 tokens for hint!"; return; }
+        let availableWrong = [];
+        for (let i = 0; i < currentQuestion.opts.length; i++) {
+            if (i !== currentQuestion.correct && !disabledIndices.includes(i)) availableWrong.push(i);
+        }
+        if (availableWrong.length === 0) { statusSpan.innerText = "💡 All wrong options already removed! Choose correct."; return; }
+        currentTokens -= 20;
+        updateTokenUI();
+        const toDisable = availableWrong[Math.floor(Math.random() * availableWrong.length)];
+        disabledIndices.push(toDisable);
+        const optDivs = document.querySelectorAll(".option");
+        if (optDivs[toDisable]) {
+            optDivs[toDisable].style.opacity = "0.4";
+            optDivs[toDisable].style.pointerEvents = "none";
+            statusSpan.innerText = `💡 Hint used! Removed one wrong option (-20 tokens).`;
+        }
+        const remainingWrong = availableWrong.filter(i => !disabledIndices.includes(i)).length;
+        if (remainingWrong === 0) statusSpan.innerText = "✨ All wrong options removed! Select correct answer.";
+    }
+
+    function revealAnswer() {
+        if (answerLock || !currentQuestion) return;
+        if (currentTokens < 30) { statusSpan.innerText = "🚫 Need 30 tokens to reveal!"; return; }
+        currentTokens -= 30;
+        updateTokenUI();
+        const correctIdx = currentQuestion.correct;
+        statusSpan.innerText = `🔍 Answer: ${currentQuestion.opts[correctIdx]} (-30 tokens)`;
+        const optDivs = document.querySelectorAll(".option");
+        if (optDivs[correctIdx]) optDivs[correctIdx].classList.add("correct-feedback");
+    }
+
+    function resetSingleGame() {
+        score = 0;
+        answerLock = false;
+        loadNewQuestion();
+        nextBtn.classList.add("disabled");
+    }
+
+    // ---------- MULTIPLAYER (FIXED: using reliable server) ----------
+    function generateRoomCode(roomName, password) {
+        let raw = roomName + password;
+        let code = btoa(raw).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+        return code;
+    }
+
+    function handlePeerData(data) {
+
+    // GAME STARTED
+    if (data.type === "game_start") {
+
+        questionPool = data.pool;
+
+        gameStarted = true;
+
+        currentQuestionIndex = 0;
+
+        score = 0;
+
+        opponentScore = 0;
+
+        statusSpan.innerText = "🎮 Quiz Started!";
+
+        // FIRST QUESTION
+        currentQuestion = questionPool[currentQuestionIndex];
+
+        renderMultiplayerQuestion();
+
+        answerLock = false;
+
+        enableOptions(true);
+
+        clearOptionStyles();
+
+        startTimer(10);
+    }
+
+    // NEW QUESTION RECEIVED
+    else if (data.type === "new_question") {
+
+        currentQuestion = data.question;
+
+        renderMultiplayerQuestion();
+
+        answerLock = false;
+
+        enableOptions(true);
+
+        clearOptionStyles();
+
+        startTimer(10);
+
+        statusSpan.innerText = "⚡ New Question!";
+    }
+
+    // SOMEONE ANSWERED CORRECTLY
+    else if (data.type === "answer_result") {
+
+        if (answerLock) return;
+
+        answerLock = true;
+
+        clearInterval(timerInterval);
+
+        const allOps = document.querySelectorAll(".option");
+
+        if (allOps[currentQuestion.correct]) {
+            allOps[currentQuestion.correct]
+                .classList.add("correct-feedback");
+        }
+
+        if (data.playerId === peer.id) {
+
+            score++;
+
+            statusSpan.innerText =
+                "✅ You answered first!";
+
+        } else {
+
+            opponentScore++;
+
+            statusSpan.innerText =
+                "❌ Opponent answered first!";
+        }
+
+        opponentScoreDiv.innerText =
+            `Opponent Score: ${opponentScore}`;
+
+        enableOptions(false);
+
+        setTimeout(() => {
+
+            if (isHost) {
+
+                nextMultiplayerQuestion();
+            }
+
+        }, 2000);
+    }
+
+    // TIMEOUT
+    else if (data.type === "timeout_next") {
+
+        if (answerLock) return;
+
+        answerLock = true;
+
+        statusSpan.innerText = "⏰ Time up!";
+
+        enableOptions(false);
+
+        setTimeout(() => {
+
+            if (isHost) {
+
+                nextMultiplayerQuestion();
+            }
+
+        }, 1500);
+    }
+
+    // GAME END
+    else if (data.type === "game_end") {
+
+        gameStarted = false;
+
+        clearInterval(timerInterval);
+
+        questionDiv.innerText = "🏁 GAME OVER";
+
+        optionsDiv.innerHTML = "";
+
+        statusSpan.innerText =
+            `Final Score: ${score}`;
+
+        opponentScoreDiv.innerText =
+            `Opponent Score: ${opponentScore}`;
+    }
+}
+
+    function renderMultiplayerQuestion() {
+        if (!currentQuestion) return;
+        questionDiv.innerText = currentQuestion.q;
+        optionsDiv.innerHTML = "";
+        currentQuestion.opts.forEach((opt, idx) => {
+            const optDiv = document.createElement("div");
+            optDiv.classList.add("option");
+            optDiv.innerText = opt;
+            optDiv.onclick = () => submitMultiplayerAnswer(idx);
+            optionsDiv.appendChild(optDiv);
+        });
+        clearOptionStyles();
+    }
+
+    function submitMultiplayerAnswer(selectedIdx) {
+        if (!gameStarted || answerLock) return;
+        const isCorrect = (selectedIdx === currentQuestion.correct);
+        if (isCorrect) {
+            if (!isHost) {
+                connections.forEach(conn => conn.send({ type: "answer_result", correct: true, playerId: peer.id }));
+            } else {
+                if (!answerLock) {
+                    answerLock = true;
+                    clearInterval(timerInterval);
+                    score++;
+                    opponentScoreDiv.innerText = `Opponent Score: ${opponentScore}`;
+                    statusSpan.innerText = "✅ You answered first correctly!";
+                    const allOps = document.querySelectorAll(".option");
+                    if (allOps[currentQuestion.correct]) allOps[currentQuestion.correct].classList.add("correct-feedback");
+                    enableOptions(false);
+                    broadcast({ type: "answer_result", correct: true, playerId: peer ? peer.id : "host" });
+                    setTimeout(() => nextMultiplayerQuestion(), 2000);
+                }
+            }
+        } else {
+            statusSpan.innerText = "❌ Wrong! You cannot answer again this question.";
+            enableOptions(false);
+        }
+    }
+
+    function startTimer(seconds) {
+        if (timerInterval) clearInterval(timerInterval);
+        timeLeft = seconds;
+        timerBar.style.width = "100%";
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            timerBar.style.width = `${(timeLeft / seconds) * 100}%`;
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                if (!answerLock && gameStarted) {
+                    statusSpan.innerText = "⏰ Time's up! No one answered.";
+                    if (isHost) {
+                        broadcast({ type: "timeout_next" });
+                        nextMultiplayerQuestion();
+                    }
+                }
+            }
+        }, 1000);
+    }
+
+    function loadMultiplayerQuestion() {
+
+    if (currentQuestionIndex >= questionPool.length) {
+
+        broadcast({ type: "game_end" });
+
+        gameStarted = false;
+
+        statusSpan.innerText =
+            `🏁 Game finished! Your score: ${score}`;
+
+        return;
+    }
+
+    currentQuestion = questionPool[currentQuestionIndex];
+
+    renderMultiplayerQuestion();
+
+    answerLock = false;
+
+    enableOptions(true);
+
+    clearOptionStyles();
+
+    startTimer(10);
+
+    // SEND QUESTION TO CLIENTS
+    if (isHost) {
+
+        broadcast({
+            type: "new_question",
+            question: currentQuestion
+        });
+    }
+}
+
+    function nextMultiplayerQuestion() {
+        if (!gameStarted) return;
+        currentQuestionIndex++;
+        loadMultiplayerQuestion();
+    }
+
+    function broadcast(msg) { connections.forEach(conn => conn.send(msg)); }
+    function updatePlayersList() { playersListDiv.innerText = `Players connected: ${connections.length + 1}`; }
+
+    // FIXED: Use reliable PeerJS server
+    function createRoom() {
+        const roomName = document.getElementById("roomName").value.trim();
+        const password = document.getElementById("roomPassword").value;
+        const domain = document.getElementById("multiDomain").value;
+        const difficulty = document.getElementById("multiDifficulty").value;
+        if (!roomName) { mpStatus.innerText = "Enter room name"; return; }
+        const roomCode = generateRoomCode(roomName, password);
+        isHost = true;
+        let pool = [];
+        for (let i = 0; i < 10; i++) {
+            let q = getUniqueQuestion(domain, difficulty);
+            if (q) pool.push(q);
+        }
+        questionPool = pool;
+        if (peer) peer.destroy();
+        // Use custom server that works
+        peer = new Peer(roomCode, { host: '0.peerjs.com', port: 443, secure: true });
+        peer.on('open', () => {
+            mpStatus.innerText = `Room "${roomName}" created. Share name & password.`;
+            peer.on('connection', conn => {
+                connections.push(conn);
+                conn.on('data', data => handlePeerData(data));
+                updatePlayersList();
+                if (connections.length >= 1) startGameBtn.style.display = "block";
+            });
+        });
+        peer.on('error', err => { mpStatus.innerText = `Error: ${err}`; console.error(err); });
+        startGameBtn.onclick = () => {
+
+    if (connections.length === 0) {
+
+        statusSpan.innerText =
+            "Need at least one more player!";
+
+        return;
+    }
+
+    gameStarted = true;
+
+    currentQuestionIndex = 0;
+
+    score = 0;
+
+    opponentScore = 0;
+
+    // SEND GAME START FIRST
+    broadcast({
+        type: "game_start",
+        pool: questionPool
+    });
+
+    // SMALL DELAY TO ALLOW CLIENTS TO PREPARE
+    setTimeout(() => {
+
+        loadMultiplayerQuestion();
+
+    }, 500);
+
+    startGameBtn.style.display = "none";
+};
+    }
+
+    function joinRoom() {
+        const roomName = document.getElementById("roomName").value.trim();
+        const password = document.getElementById("roomPassword").value;
+        const roomCode = generateRoomCode(roomName, password);
+        isHost = false;
+        if (peer) peer.destroy();
+        peer = new Peer({ host: '0.peerjs.com', port: 443, secure: true });
+        peer.on('open', () => {
+            const conn = peer.connect(roomCode);
+            conn.on('open', () => {
+                connections.push(conn);
+                conn.on('data', data => handlePeerData(data));
+                mpStatus.innerText = `Joined room ${roomName}. Waiting for host...`;
+                updatePlayersList();
+            });
+            conn.on('error', err => { mpStatus.innerText = `Connection error: ${err}`; });
+        });
+        peer.on('error', err => { mpStatus.innerText = `Peer error: ${err}`; });
+    }
+
+    function leaveRoom() {
+
+    if (timerInterval) {
+
+        clearInterval(timerInterval);
+    }
+
+    if (peer) {
+
+        peer.destroy();
+    }
+
+    connections = [];
+
+    gameStarted = false;
+
+    mpStatus.innerText = "Disconnected.";
+
+    startGameBtn.style.display = "none";
+
+    playersListDiv.innerText = "Players: --";
+
+    opponentScoreDiv.innerText = "Opponent Score: --";
+
+    score = 0;
+
+    statusSpan.innerText =
+        "Multiplayer mode. Create or join a room.";
+
+    questionDiv.innerText =
+        "Select multiplayer settings and create/join room";
+
+    optionsDiv.innerHTML = "";
+}
+
+    // ---------- MODE SWITCHING (hide single-player buttons in multi) ----------
+    function setMode(mode) {
+        currentMode = mode;
+        document.getElementById("switchToSingle").classList.toggle("active", mode === "single");
+        document.getElementById("switchToMulti").classList.toggle("active", mode === "multi");
+        if (mode === "single") {
+            singleConfigDiv.style.display = "flex";
+            multiPanel.style.display = "none";
+            if (peer) leaveRoom();
+            document.querySelectorAll(".single-only").forEach(el => el.style.display = "flex");
+            resetSingleGame();
+        } else {
+            singleConfigDiv.style.display = "none";
+            multiPanel.style.display = "block";
+            leaveRoom();
+            document.querySelectorAll(".single-only").forEach(el => el.style.display = "none");
+            currentQuestion = null;
+            gameStarted = false;
+            statusSpan.innerText = "Multiplayer mode. Create or join a room.";
+            questionDiv.innerText = "Select multiplayer settings and create/join room";
+            optionsDiv.innerHTML = "";
+        }
+    }
+
+    // Initial mode selection
+    document.getElementById("chooseSingle").onclick = () => {
+        document.getElementById("modeOverlay").style.display = "none";
+        document.getElementById("mainArena").style.display = "block";
+        setMode("single");
+    };
+    document.getElementById("chooseMulti").onclick = () => {
+        document.getElementById("modeOverlay").style.display = "none";
+        document.getElementById("mainArena").style.display = "block";
+        setMode("multi");
+    };
+    document.getElementById("switchToSingle").onclick = () => setMode("single");
+    document.getElementById("switchToMulti").onclick = () => setMode("multi");
+
+    // Event bindings
+    newGameBtn.onclick = () => { if (currentMode === "single") resetSingleGame(); };
+    hintBtn.onclick = () => { if (currentMode === "single") useHint(); };
+    revealBtn.onclick = () => { if (currentMode === "single") revealAnswer(); };
+    nextBtn.onclick = () => { if (currentMode === "single") goToNextQuestion(); };
+    domainSelect.onchange = () => { if (currentMode === "single") { currentDomain = domainSelect.value; resetSingleGame(); } };
+    difficultySelect.onchange = () => { if (currentMode === "single") { currentDifficulty = difficultySelect.value; resetSingleGame(); } };
+    createRoomBtn.onclick = createRoom;
+    joinRoomBtn.onclick = joinRoom;
+    leaveRoomBtn.onclick = leaveRoom;
+
+    updateTokenUI();
+</script>
+</body>
+</html>
